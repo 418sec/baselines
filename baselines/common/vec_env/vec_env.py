@@ -1,9 +1,30 @@
 import contextlib
 import os
 from abc import ABC, abstractmethod
-
+import io
+import builtins
 from baselines.common.tile_images import tile_images
+safe_builtins = {
+    'range',
+    'complex',
+    'set',
+    'frozenset',
+    'slice',
+}
 
+class RestrictedUnpickler(pickle.Unpickler):
+
+    def find_class(self, module, name):
+        """Only allow safe classes from builtins"""
+        if module == "builtins" and name in safe_builtins:
+            return getattr(builtins, name)
+        """Forbid everything else"""
+        raise pickle.UnpicklingError("global '%s.%s' is forbidden" %
+                                     (module, name))
+
+def restricted_loads(s):
+    """Helper function analogous to pickle.loads()"""
+    return RestrictedUnpickler(io.BytesIO(s)).load()
 class AlreadySteppingError(Exception):
     """
     Raised when an asynchronous step is running while
@@ -200,7 +221,8 @@ class CloudpickleWrapper(object):
         return cloudpickle.dumps(self.x)
 
     def __setstate__(self, ob):
-        import pickle
+        #import pickle
+        restricted_loads(ob)
         self.x = pickle.loads(ob)
 
 
